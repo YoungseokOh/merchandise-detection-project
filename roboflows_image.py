@@ -10,9 +10,9 @@ from segment_anything import sam_model_registry, SamAutomaticMaskGenerator
 from deep_sort_realtime.deepsort_tracker import DeepSort
 
 # Roboflow 모델 정보
-API_KEY = "3eDw4J9aKw6I4hKjvGf1"  # 여기에 본인의 API 키를 입력하세요
-MODEL_ENDPOINT = "merchandise-83wvm"  # 프로젝트 이름
-MODEL_VERSION = "14"  # 모델 버전
+API_KEY = ""  
+MODEL_ENDPOINT = ""
+MODEL_VERSION = "14"
 
 # SAM 모델 설정
 sam_checkpoint = "E:/merchandise_dataset/model/sam_vit_b_01ec64.pth"
