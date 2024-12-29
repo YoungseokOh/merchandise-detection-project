@@ -59,10 +59,10 @@ font = ImageFont.truetype(font_path, 15)  # 폰트 크기는 상황에 맞게 �
 
 # DeepSORT 추적기 초기화
 tracker = DeepSort(
-    max_age=10,           # 객체가 5 프레임 동안 탐지되지 않으면 추적 종료
-    n_init=5,            # 한 번의 탐지로 추적 확정
+    max_age=5,           # 객체가 5 프레임 동안 탐지되지 않으면 추적 종료
+    n_init=3,            # 한 번의 탐지로 추적 확정
     nms_max_overlap=1, # 50% 이상 겹치는 바운딩 박스 제거
-    max_cosine_distance=0.2,  # Appearance 매칭 임계값 조정
+    max_cosine_distance=0.5,  # Appearance 매칭 임계값 조정
     nn_budget=None,
     override_track_class=None
 )
@@ -164,7 +164,6 @@ def visualize_and_save(image_path, detections, output_path):
     
     # 탐지 목록 준비
     detection_list = []
-    legend_entries = []  # Legend에 표시할 ID와 클래스 이름 목록
     for det in detections:
         x1, y1, x2, y2, confidence, class_name = det
         bbox = [x1, y1, x2 - x1, y2 - y1]
@@ -176,6 +175,9 @@ def visualize_and_save(image_path, detections, output_path):
     
     # Draw 객체 생성
     draw = ImageDraw.Draw(image_pil)
+    
+    # 클래스별 카운트 딕셔너리 초기화
+    class_counts = {}
     
     # 추적 결과 시각화
     for track in tracks:
@@ -189,6 +191,10 @@ def visualize_and_save(image_path, detections, output_path):
     
         # 클래스 이름 매핑 적용
         display_name = next((label_map[key] for key in label_map if key in class_name), class_name)
+        
+        # 클래스별 카운트 증가
+        class_counts[display_name] = class_counts.get(display_name, 0) + 1
+        
         label = f"ID:{track_id} {display_name}"
         
         # 바운딩 박스 그리기 (PIL에서 그리기)
@@ -197,14 +203,6 @@ def visualize_and_save(image_path, detections, output_path):
         # 한글 라벨 표시
         draw.text((x1, y1 - 20), label, font=font, fill=color)
     
-        # SAM을 통해 마스크 생성 및 바이너리 마스크 오버레이
-        track_bbox_coords = (x1, y1, x2, y2)
-        # masks = apply_sam_within_bbox(image_pil, track_bbox_coords)
-        # image_pil = overlay_binary_mask(image_pil, track_bbox_coords, masks, color)
-        
-        # Legend에 추가할 항목 생성
-        legend_entries.append((track_id, display_name))
-
     # Legend 영역 크기와 위치 설정
     image_width, image_height = image_pil.size
     legend_x, legend_y = image_width - 170, 10  # 오른쪽 상단 위치
@@ -212,30 +210,33 @@ def visualize_and_save(image_path, detections, output_path):
     header_height = 30  # 열 제목 높이 조정
     legend_bg_color = (255, 255, 255)  # 흰색 배경
     outline_color = (0, 0, 0)  # 테두리 색상
-
-    # 표시할 최대 항목 수 (스크롤 방지를 위해)
+    
+    # 클래스별 카운트를 리스트로 변환 및 정렬
+    legend_entries = sorted(class_counts.items(), key=lambda x: x[0])  # 이름순 정렬
+    
+    # 표시할 최대 항목 수 (최대 10개)
     max_entries = 10
     displayed_entries = legend_entries[:max_entries]  # 표시할 항목 제한
-
+    
     # 둥근 직사각형 배경 그리기
     draw.rounded_rectangle(
         [legend_x - 5, legend_y - 5, legend_x + legend_width, legend_y + (row_height * len(displayed_entries)) + header_height],
-        radius=10, fill=legend_bg_color, outline=outline_color, width=1  # 둥근 모서리 및 테두리 두께 조정
+        radius=10, fill=legend_bg_color, outline=outline_color, width=1
     )
-
+    
     # 열 제목 추가
-    draw.text((legend_x + 5, legend_y), "ID", font=title_font, fill=(0, 0, 0))
-    draw.text((legend_x + 50, legend_y), "SNACK", font=title_font, fill=(0, 0, 0))
+    draw.text((legend_x + 5, legend_y), "SNACK", font=title_font, fill=(0, 0, 0))
+    draw.text((legend_x + 100, legend_y), "COUNT", font=title_font, fill=(0, 0, 0))
     draw.line([(legend_x, legend_y + header_height - 3), (legend_x + legend_width, legend_y + header_height - 3)], fill=outline_color, width=1)
     
     # Legend 테이블 내용 추가
-    for idx, (track_id, display_name) in enumerate(displayed_entries):
+    for idx, (display_name, count) in enumerate(displayed_entries):
         text_y = legend_y + header_height + (idx * row_height)  # 각 행의 y 위치 설정
-        # ID와 클래스 이름 추가
-        draw.text((legend_x + 5, text_y), str(track_id), font=font, fill=(0, 0, 0))
-        draw.text((legend_x + 50, text_y), display_name, font=font, fill=(0, 0, 0))
-    
-    # 결과 이미지 저장 (PIL 이미지를 OpenCV로 변환하여 저장)
+        # SNACK과 COUNT 추가
+        draw.text((legend_x + 5, text_y), display_name, font=font, fill=(0, 0, 0))
+        draw.text((legend_x + 100, text_y), f"x {count}", font=font, fill=(0, 0, 0))
+        
+    # 결과 이미지 저장
     result_image = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2BGR)
     cv2.imwrite(output_path, result_image)
     print(f"Processed and saved: {output_path}")
